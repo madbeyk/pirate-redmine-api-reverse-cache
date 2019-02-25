@@ -1,0 +1,16 @@
+{
+  "name": "pirate-redmine-api-reverse-cache",
+  "version": "1.0.1",
+  "description": "Pirate Redmine Api Reverse Proxy Cache",
+  "main": "app2.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start2": "nodemon app2.js"
+  },
+  "author": "Madbeyk (madbeyk@github.com)",
+  "license": "ISC",
+  "dependencies": {
+    "hapi": "^18.1.0",
+    "nodemon": "^1.18.10"
+  }
+}
