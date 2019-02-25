@@ -27,8 +27,8 @@ const pref={
 };
 
 const server = Hapi.server({
-    port: process.env.APIPORT || 80,
-    host: process.env.APIHOST || '0.0.0.0'
+    port: process.env.PORT || 80,
+    host: process.env.HOST || '0.0.0.0'
 });
 
 const NS_PER_SEC = 1e9;
