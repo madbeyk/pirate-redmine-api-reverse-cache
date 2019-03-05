@@ -54,5 +54,5 @@ yarn run start2
 - [ ] Image processing (caching, resizing, minimizing ...)
 
 ```
-](;)~~~~~
+];()~~~~~
 ```
