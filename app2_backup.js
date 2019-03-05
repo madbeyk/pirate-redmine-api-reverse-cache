@@ -2,7 +2,6 @@
 
 const Hapi = require('hapi');
 const Wreck = require('wreck');
-const { TaskTimer } = require('tasktimer');
 
 // -----------------------------------------------------------------------------
 // setup 
@@ -35,7 +34,7 @@ const server = Hapi.server({
 
 const NS_PER_SEC = 1e9;
 
-const version='2019-03-01';
+const version='2019-02-26';
 
 const htmlinfo=`
        <html>
@@ -72,12 +71,6 @@ const injectOptions = {
       method: 'GET',
       url: '/',
     }
-
-const injectOptionsReload = {
-      method: 'GET',
-      url: '/reload',
-    }
-
 
 
 // -----------------------------------------------------------------------------
@@ -212,7 +205,7 @@ const getRedmineData = async(id,flags) => {
               }
             }
           qq.subject=doc.issues[i].subject;
-          qq.description=doc.issues[i].description.replace(/(\[[^\[\]]+\])\s+(\([^)]+\))/g, '$1$2');
+          qq.description=doc.issues[i].description;
           if ((doc.issues[i].hasOwnProperty('custom_fields')) && (doc.issues[i].custom_fields[0].hasOwnProperty('value')) && (doc.issues[i].custom_fields[0].value!="")){
             qq.custom_fields={};
             qq.custom_fields[0]={};
@@ -255,7 +248,7 @@ var minute = 60 * second;
 server.method('getRedmineData', getRedmineData, {
   cache: {
     expiresIn: 360 * minute,
-    staleIn: 31 * minute,
+    staleIn: 30 * minute,
     staleTimeout: 200,
     generateTimeout: 10000,
     getDecoratedValue: true
@@ -348,11 +341,10 @@ server.route({
     method: 'GET',
     path: '/',
     handler: async function (request, h) {
-      //rheaders=JSON.stringify(request.headers);
+      //console.log(JSON.stringify(request.info));
       const time = process.hrtime();
       const {value, cached} = await server.methods.getRedmineData(1);
-      //const ip = request.info.remoteAddress;
-      const ip = request.headers['trueip'];
+      const ip = request.info.remoteAddress;
       const diff = process.hrtime(time);
       if (cached!=null) {
         console.log('Request IP:'+ip+', cached - ttl:'+cached.ttl+', processing time:'+financial((diff[0] * NS_PER_SEC + diff[1])/1000)+'µs');
@@ -398,26 +390,3 @@ process.on('unhandledRejection', (err) => {
   });
 
 init();
-
-
-// -----------------------------------------------------------------------------
-// timer for automatic data updates
-// -----------------------------------------------------------------------------
-
-const timer = new TaskTimer(60000);
- 
-timer.add([
-    {
-        id: 'Autoupdate',       
-        tickInterval: 30,   
-        totalRuns: 0,       
-        async callback(task, done) {
-          console.log(`${task.id} task has run ${task.currentRuns} times.`);
-          await server.inject(injectOptionsReload);
-          done();
-        }
-    }
-]);
- 
- 
-timer.start();
