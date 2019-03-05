@@ -52,3 +52,7 @@ yarn run start2
 - [x] Automatic data update every 30 minutes
 - [ ] Advanced external API error handling (outtages ...)
 - [ ] Image processing (caching, resizing, minimizing ...)
+
+```
+](;)~~~~~
+```
