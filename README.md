@@ -1,7 +1,9 @@
 # Pirate Redmine Api Reverse Proxy Cache
 early beta (big bordel) stage
 
-### Advanced Redmine JSON API Reverse Cache with merging, filtering, sorting and autoupdating ability
+### Advanced Redmine JSON API Reverse Cache
+#### with merging, filtering, sorting and autoupdating ability
+
 Source data - Czech Pirate Party Redmine project management server JSON API<br/>
 https://redmine.pirati.cz/projects/snemovna/issues.json
 
