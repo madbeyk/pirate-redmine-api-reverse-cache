@@ -25,8 +25,8 @@ Caching data in catbox-memory.
 
 ### Win/Win
 1. Now the response is sorted and filtered (smaller payload by aprox. 25%)
-2. Server keeps cached data in memory for 30 minutes
-2. Response time is below 200ms
+2. Server keeps cached data in memory and automaticly reload them every 30 minutes
+3. Response time is below 200ms
 
 ### Install
 ```
