@@ -13,6 +13,7 @@
   "dependencies": {
     "hapi": "^18.1.0",
     "nodemon": "^1.18.10",
+    "sharp": "^0.21.3",
     "tasktimer": "^2.0.1",
     "wreck": "^14.1.4"
   }

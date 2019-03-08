@@ -2,7 +2,9 @@
 
 const Hapi = require('hapi');
 const Wreck = require('wreck');
+const fs = require('fs');
 const { TaskTimer } = require('tasktimer');
+const sharp = require('sharp');
 
 // -----------------------------------------------------------------------------
 // setup 
@@ -10,6 +12,8 @@ const { TaskTimer } = require('tasktimer');
 
 var url = "https://redmine.pirati.cz/projects/snemovna/issues.json?utf8=%E2%9C%93&set_filter=1&sort=id%3Adesc%2C%2C&f%5B%5D=tracker_id&op%5Btracker_id%5D=%3D&v%5Btracker_id%5D%5B%5D=28&f%5B%5D=status_id&op%5Bstatus_id%5D=%21&v%5Bstatus_id%5D%5B%5D=6&f%5B%5D=&c%5B%5D=subject&c%5B%5D=tags_relations&group_by=project&t%5B%5D=";
 var url2 = "https://redmine.pirati.cz/projects/snemovna/issue.json?utf8=%E2%9C%93&set_filter=1&sort=id%3Adesc%2C%2C&f%5B%5D=tracker_id&op%5Btracker_id%5D=%3D&v%5Btracker_id%5D%5B%5D=28&f%5B%5D=status_id&op%5Bstatus_id%5D=%21&v%5Bstatus_id%5D%5B%5D=6&f%5B%5D=&c%5B%5D=subject&c%5B%5D=tags_relations&group_by=project&t%5B%5D=";
+var gimages=[];
+
 
 const pref={
 'resort-doprava-a-logistika':4,
@@ -35,7 +39,7 @@ const server = Hapi.server({
 
 const NS_PER_SEC = 1e9;
 
-const version='2019-03-01';
+const version='2019-03-06';
 
 const htmlinfo=`
        <html>
@@ -165,6 +169,7 @@ const getRedmineData = async(id,flags) => {
     var iter=0;
     var totalcount=0;
     var issues=[];
+    var images=[];
     var st=0;
     
     
@@ -212,15 +217,21 @@ const getRedmineData = async(id,flags) => {
               }
             }
           qq.subject=doc.issues[i].subject;
+          // fix markdown url space issue 
           qq.description=doc.issues[i].description.replace(/(\[[^\[\]]+\])\s+(\([^)]+\))/g, '$1$2');
+          
           if ((doc.issues[i].hasOwnProperty('custom_fields')) && (doc.issues[i].custom_fields[0].hasOwnProperty('value')) && (doc.issues[i].custom_fields[0].value!="")){
             qq.custom_fields={};
             qq.custom_fields[0]={};
             qq.custom_fields[0].value=doc.issues[i].custom_fields[0].value;
             qq.custom_fields[0].id=doc.issues[i].custom_fields[0].id;
+            var im=qq.custom_fields[0].value;
+            var imenc=encodeURIComponent(im);
+            images.push(im);
+            console.log('Linked image '+im+' ['+imenc+']');
             // filtr na nesmysly v img
-            if (qq.custom_fields[0].value.substr(0,22)=='https://mrak.pirati.cz') qq.custom_fields[0].value='';
-            if (qq.custom_fields[0].value.substr(0,28)=='https://www.ceskatelevize.cz') qq.custom_fields[0].value='';
+            //if (qq.custom_fields[0].value.substr(0,22)=='https://mrak.pirati.cz') qq.custom_fields[0].value='';
+            //if (qq.custom_fields[0].value.substr(0,28)=='https://www.ceskatelevize.cz') qq.custom_fields[0].value='';
             }
           issues.push(qq);
           }
@@ -231,7 +242,8 @@ const getRedmineData = async(id,flags) => {
       var out=JSON.stringify(issues);
       var len=out.length;
       var ts2 = new Date().getTime();
-      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/st)*100)+'% of original payload], time:'+(ts2-ts1)+'ms');
+      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/st)*100)+'% of original payload], images:'+images.length+', time:'+(ts2-ts1)+'ms');
+      gimages=images;
       //url=url2;
       return('{"issues":'+out+'}');
     
@@ -245,12 +257,73 @@ const getRedmineData = async(id,flags) => {
 
 
 // -----------------------------------------------------------------------------
-// server method (caching)
+// global image method 
+// -----------------------------------------------------------------------------
+
+const getImageData = async(id,width,height,gtyp,flags) => {
+    //console.log('Image data fetch ...');
+    var ts1 = new Date().getTime();
+
+    if (gimages.includes(id)) { 
+
+      var size = 0;
+      
+      try {
+      
+        var acturl=id;
+        var { res, payload } = await Wreck.get(acturl);
+                
+        const { statusCode } = res;
+        let error;
+        
+        // error handling
+        if ((statusCode !== 200)  && (statusCode !== 301)) {
+          error = new Error('Image request Failed.\n'+`Status Code: ${statusCode}`);
+          }
+        if (error) {
+          console.log(error.message);
+          res.resume();
+          throw(error);
+          }
+        
+        size=Buffer.byteLength(payload);
+        if (gtyp=='webp') payload = await sharp(payload).resize(parseInt(width)).webp({lossless: false, quality: 75}).toBuffer();//.then(console.log('webp image resized'));
+        if (gtyp=='jpg') payload = await sharp(payload).resize(parseInt(width)).jpeg({quality: 80}).toBuffer();//.then(console.log('jpg image resized'));
+        if (gtyp=='png') payload = await sharp(payload).resize(parseInt(width)).png().toBuffer();//.then(console.log('png image resized'));
+        //payload = await sharp(payload).resize(parseInt(width)).webp({ lossless: false, quality: 75 }).toBuffer().then(console.log('image resized'));        
+              
+        if (payload instanceof Buffer) { 
+          payload = payload.toString('hex');
+          }
+                   
+        var ts2 = new Date().getTime();
+        console.log('Image data fetch finished '+id+' ('+size+' bytes), time:'+(ts2-ts1)+'ms');
+        return(payload);
+      
+      } catch (ex) {
+        console.log('! Error: Image fetch ('+id+') / '+ex.message);
+        throw ex;      
+        }
+      
+      } else {
+      console.log('Image '+id+' not exists');
+      return('');
+      }
+            
+    
+    };
+
+
+
+// -----------------------------------------------------------------------------
+// server methods (caching)
 // -----------------------------------------------------------------------------
 
 
 var second = 1000;
 var minute = 60 * second;
+
+// method for JSON data
 
 server.method('getRedmineData', getRedmineData, {
   cache: {
@@ -261,6 +334,19 @@ server.method('getRedmineData', getRedmineData, {
     getDecoratedValue: true
   }
 });
+
+// method for image data
+
+server.method('getImageData', getImageData, {
+  cache: {
+    expiresIn: 24 * 60 * minute,
+    staleIn: 241 * minute,
+    staleTimeout: 200,
+    generateTimeout: 10000,
+    getDecoratedValue: true,
+  }
+});
+
 
 
 // -----------------------------------------------------------------------------
@@ -366,13 +452,56 @@ server.route({
       },
     options: {
       cache: {
-        expiresIn: 120 * 60 * 1000,
+        expiresIn: 360 * 60 * 1000,
         privacy: 'private'
         }
       }
       
   });
 
+server.route({
+    method: 'GET',
+    path: '/img/{gid}',
+    handler: async function (request, h) {
+      //rheaders=JSON.stringify(request.headers);
+      const time = process.hrtime();
+      const gid = request.params.gid;
+      const width = request.query.w || 240;
+      const height = request.query.h || 240;
+      const gtyp = request.query.t || "jpg";
+      
+      var {value, cached} = await server.methods.getImageData(gid,width,height,gtyp);
+      
+      //const ip = request.info.remoteAddress;
+      const ip = request.headers['trueip'];
+      const diff = process.hrtime(time);
+      if (cached!=null) {
+        console.log('Image ('+gid+') request IP:'+ip+', cached - ttl:'+cached.ttl+', typ:'+gtyp+', size:'+width+'x'+height+'px, processing time:'+financial((diff[0] * NS_PER_SEC + diff[1])/1000)+'µs');
+        } else {
+        console.log('Image ('+gid+') request IP:'+ip+', not cached, typ:'+gtyp+', size:'+width+'x'+height+'px, processing time:'+financial((diff[0] * NS_PER_SEC + diff[1])/1000)+'µs');
+        }
+
+      var typ='image/webp';
+      if (gtyp=='webp') typ='image/webp'; else if (gtyp=='jpg') typ='image/jpeg'; else if (gtyp=='png') typ='image/png';
+
+      //var prip=gid.toLowerCase().substr(-4,4);
+      //if (prip=='.png') typ = 'image/png';
+      
+      const lastModified = cached ? new Date(cached.stored) : new Date();
+
+      var value2 = new Buffer.from(value, "hex");
+      
+      const response = h.response(value2).header('Last-modified', lastModified.toUTCString()).header('Access-Control-Allow-Origin','*').type(typ);
+      return (response);  
+      },
+    options: {
+      cache: {
+        expiresIn: 24 * 60 * 60 * 1000,
+        privacy: 'public'
+        }
+      }
+      
+  });
 
 
 // -----------------------------------------------------------------------------
