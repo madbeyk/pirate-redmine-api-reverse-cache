@@ -228,7 +228,7 @@ const getRedmineData = async(id,flags) => {
             var im=qq.custom_fields[0].value;
             var imenc=encodeURIComponent(im);
             images.push(im);
-            console.log('Linked image '+im+' ['+imenc+']');
+            //console.log('Linked image '+im+' ['+imenc+']');
             // filtr na nesmysly v img
             //if (qq.custom_fields[0].value.substr(0,22)=='https://mrak.pirati.cz') qq.custom_fields[0].value='';
             //if (qq.custom_fields[0].value.substr(0,28)=='https://www.ceskatelevize.cz') qq.custom_fields[0].value='';
@@ -271,12 +271,13 @@ const getImageData = async(id,width,height,gtyp,flags) => {
       try {
       
         var acturl=id;
-        var { res, payload } = await Wreck.get(acturl);
+        var { res, payload } = await Wreck.get(acturl,{redirects: 5});
                 
         const { statusCode } = res;
-        let error;
+        //let error;
         
         // error handling
+        /*
         if ((statusCode !== 200)  && (statusCode !== 301)) {
           error = new Error('Image request Failed.\n'+`Status Code: ${statusCode}`);
           }
@@ -285,9 +286,10 @@ const getImageData = async(id,width,height,gtyp,flags) => {
           res.resume();
           throw(error);
           }
+        */  
         
         size=Buffer.byteLength(payload);
-        if (gtyp=='webp') payload = await sharp(payload).resize(parseInt(width)).webp({lossless: false, quality: 75}).toBuffer();//.then(console.log('webp image resized'));
+        if (gtyp=='webp') payload = await sharp(payload).resize(parseInt(width)).webp({lossless: false, quality: 65}).toBuffer();//.then(console.log('webp image resized'));
         if (gtyp=='jpg') payload = await sharp(payload).resize(parseInt(width)).jpeg({quality: 80}).toBuffer();//.then(console.log('jpg image resized'));
         if (gtyp=='png') payload = await sharp(payload).resize(parseInt(width)).png().toBuffer();//.then(console.log('png image resized'));
         //payload = await sharp(payload).resize(parseInt(width)).webp({ lossless: false, quality: 75 }).toBuffer().then(console.log('image resized'));        
@@ -301,8 +303,23 @@ const getImageData = async(id,width,height,gtyp,flags) => {
         return(payload);
       
       } catch (ex) {
-        console.log('! Error: Image fetch ('+id+') / '+ex.message);
-        throw ex;      
+        console.log('! Error: Image fetch ('+id+', '+size+' bytes) / '+ex.message);
+        //console.log('! Error payload: '+payload);
+        var payload = 0;
+        
+        try {
+          if (gtyp=='webp') payload = await sharp(null, {create: {width: 1,height: 1, channels: 3, background: { r: 255, g: 255, b: 255}}}).webp({lossless: false, quality: 1}).toBuffer();
+          if (gtyp=='jpg') payload = await sharp(null, {create: {width: 1,height: 1, channels: 3, background: { r: 255, g: 255, b: 255}}}).jpeg({quality: 1}).toBuffer();
+          if (gtyp=='png') payload = await sharp(null, {create: {width: 1,height: 1, channels: 3, background: { r: 255, g: 255, b: 255}}}).png().toBuffer();
+          } catch (ex) {
+          console.log('! Error create empty image ('+gtyp+') / '+ex.message);
+          }
+        
+        if (payload instanceof Buffer) { 
+          payload = payload.toString('hex');
+          }
+        //throw ex;      
+        return(payload);  
         }
       
       } else {
