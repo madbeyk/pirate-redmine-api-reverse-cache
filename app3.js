@@ -39,7 +39,7 @@ const server = Hapi.server({
 
 const NS_PER_SEC = 1e9;
 
-const version='2019-03-06';
+const version='2019-03-09';
 
 const htmlinfo=`
        <html>
