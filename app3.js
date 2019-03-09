@@ -44,7 +44,7 @@ const version='2019-03-09';
 const htmlinfo=`
        <html>
        <head>
-       <title>Pirate Redmine Api Reverse Proxy Cache</title> 
+       <title>Pirate Redmine API Reverse Proxy Cache</title> 
        </head>
        <style>
        body {font-family:sans-serif;}
@@ -56,15 +56,16 @@ const htmlinfo=`
          </div>
          <div style='float:left; padding-left:0.6em;'> 
           <h2 style='margin:0.1em 0;'>PIRATE REDMINE API REVERSE PROXY CACHE (v.${version})</h2>
-          <h3 style='margin:0.1em 0;'>running at: ${server.info.uri}, HAPI.JS server version ${server.version}</h3>
+          <h3 style='margin:0.1em 0;'>[${server.info.id}] running at: ${server.info.uri} (${server.info.address}), HAPI.JS server version ${server.version}</h3>
          </div>
          <div style='clear:both;'>
        </div>   
        <p>
-       Advanced JSON Reverse Cache with merging, filtering and sorting ability<br/>
+       Advanced JSON Reverse Cache with merging, filtering, sorting and autoupdating ability, experimental image proxy (resizing, minimizing)<br/>
        Source data - Czech Pirate Party Redmine project management server JSON API - <a href='https://redmine.pirati.cz/projects/snemovna/issues.json'>https://redmine.pirati.cz/projects/snemovna/issues.json</a><br/>
        Output purpose - Czech Pirate Party webpage media results application (subpage) - <a href='https://pirati.cz/vysledky'>https://pirati.cz/vysledky</a><br/>
        Created by Marek Förster (marek.forster@pirati.cz) using HAPI.JS - <a href='https://hapijs.com'>https://hapijs.com</a><br/>
+       GitHub repository - <a href='https://github.com/madbeyk/pirate-redmine-api-reverse-cache'>https://github.com/madbeyk/pirate-redmine-api-reverse-cache</a><br/>
        </p>
 `;
 
@@ -169,7 +170,7 @@ const getRedmineData = async(id,flags) => {
     var iter=0;
     var totalcount=0;
     var issues=[];
-    var images=[];
+    //var images=[];
     var st=0;
     
     
@@ -227,7 +228,7 @@ const getRedmineData = async(id,flags) => {
             qq.custom_fields[0].id=doc.issues[i].custom_fields[0].id;
             var im=qq.custom_fields[0].value;
             var imenc=encodeURIComponent(im);
-            images.push(im);
+            if (gimages.includes(im)==false) gimages.push(im);
             //console.log('Linked image '+im+' ['+imenc+']');
             // filtr na nesmysly v img
             //if (qq.custom_fields[0].value.substr(0,22)=='https://mrak.pirati.cz') qq.custom_fields[0].value='';
@@ -242,8 +243,8 @@ const getRedmineData = async(id,flags) => {
       var out=JSON.stringify(issues);
       var len=out.length;
       var ts2 = new Date().getTime();
-      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/st)*100)+'% of original payload], images:'+images.length+', time:'+(ts2-ts1)+'ms');
-      gimages=images;
+      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/st)*100)+'% of original payload], images:'+gimages.length+', time:'+(ts2-ts1)+'ms');
+      //gimages=images;
       //url=url2;
       return('{"issues":'+out+'}');
     
@@ -255,9 +256,39 @@ const getRedmineData = async(id,flags) => {
     
     };
 
+/*
+// -----------------------------------------------------------------------------
+// image method - get image data from net 
+// -----------------------------------------------------------------------------
+
+const getFileURL = async(id,flags) => {
+      try {
+      
+        var acturl=id;
+        var { res, payload } = await Wreck.get(acturl,{redirects: 5});
+        if (payload instanceof Buffer) { 
+          payload = payload.toString('hex');
+          }
+        return(payload);
+
+      } catch (ex) {
+        console.log('! Error: FileURL fetch ('+id+', '+size+' bytes) / '+ex.message);
+        //console.log('! Error payload: '+payload);
+        var payload = '';
+        
+        if (payload instanceof Buffer) { 
+          payload = payload.toString('hex');
+          }
+        return(payload);  
+        }
+
+  };
+*/
+
+const cache = server.cache({ segment: 'images', expiresIn: 24 *60 * 60 * 1000 });
 
 // -----------------------------------------------------------------------------
-// global image method 
+// global image method - get minimized image 
 // -----------------------------------------------------------------------------
 
 const getImageData = async(id,width,height,gtyp,flags) => {
@@ -271,9 +302,20 @@ const getImageData = async(id,width,height,gtyp,flags) => {
       try {
       
         var acturl=id;
-        var { res, payload } = await Wreck.get(acturl,{redirects: 5});
+        
+        var origimg = await cache.get(acturl);
+        
+        if (origimg==null) {
+          console.log('*** original fetching - '+id);
+          var { res, payload } = await Wreck.get(acturl,{redirects: 5});
+          const { statusCode } = res;
+          await cache.set(id,payload.toString('hex'));
+          } else {
+          payload=new Buffer.from(origimg, "hex");
+          console.log('*** original from cache - '+id);
+          //console.log('-> '+payload);
+          }          
                 
-        const { statusCode } = res;
         //let error;
         
         // error handling
@@ -356,6 +398,8 @@ server.method('getRedmineData', getRedmineData, {
 
 server.method('getImageData', getImageData, {
   cache: {
+    //expiresIn: 20 * second,
+    //staleIn: 15 * second,
     expiresIn: 24 * 60 * minute,
     staleIn: 241 * minute,
     staleTimeout: 200,
@@ -378,6 +422,11 @@ server.route({
        for(var l in logmessages) { out+=logmessages[l]+"<br/>";} 
        return `
        `+htmlinfo+`
+       <p>
+       Event loop delay: `+server.load.eventLoopDelay+` ms<br/>
+       Heap used: `+server.load.heapUsed+`<br/>
+       RSS memory usage: `+server.load.rss+`<br/>
+       </p>
        <p>
        Last log:
        <pre>`+out+`</pre>
@@ -531,7 +580,6 @@ const init = async () => {
   console.log('PIRATE REDMINE API REVERSE PROXY CACHE (v.'+version+')');
   
   await server.start();
-  //var cache = server.cache({ segment: '#getRedmineData', expiresIn: 360 * minute, staleIn: 30 * minute, staleTimeout: 200, generateTimeout: 10000, getDecoratedValue: true});
   console.log(`Running at: ${server.info.uri}, HAPI.JS server version ${server.version}`);
   console.log(`Initializing request - caching data ...`);
   const response = await server.inject(injectOptions);
