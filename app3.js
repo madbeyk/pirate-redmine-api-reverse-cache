@@ -1,8 +1,10 @@
+/*jslint 
+es6:true*/
 'use strict';
 
 const Hapi = require('hapi');
 const Wreck = require('wreck');
-const fs = require('fs');
+//const fs = require('fs');
 const { TaskTimer } = require('tasktimer');
 const sharp = require('sharp');
 
@@ -76,6 +78,11 @@ const htmlinfo=`
 const injectOptions = {
       method: 'GET',
       url: '/',
+    }
+
+const injectOptionsImgreload = {
+      method: 'GET',
+      url: '/imgreload',
     }
 
 const injectOptionsReload = {
@@ -481,6 +488,32 @@ server.route({
 
 server.route({
     method: 'GET',
+    path: '/imgreload',
+    handler: async (request, h) => {
+        const ip = request.info.remoteAddress;
+        console.log('Image cache reload request - IP:'+ip);
+        const time = process.hrtime();
+        var out="";    
+        for(var i in gimages) {
+            var acturl=gimages[i];
+            out+=acturl+"<br/>";
+            try {
+                var { res, payload } = await Wreck.get(acturl,{redirects: 5});
+                const { statusCode } = res;
+                await cache.set(acturl,payload.toString('hex'));
+                } catch (ex) {
+                console.log('! Error: Image fetch ('+acturl+') / '+ex.message);
+                }
+            }
+       const diff = process.hrtime(time);
+       console.log('Image cache reloaded - '+financial((diff[0] * NS_PER_SEC + diff[1])/1000000)+'ms');
+       return '<p>images reloaded in '+financial((diff[0] * NS_PER_SEC + diff[1])/1000000)+'ms</p><pre>'+out+'</pre>';       
+      }
+  });
+
+
+server.route({
+    method: 'GET',
     path: '/{other}',
     handler: async (request, h) => {
        return htmlinfo+`
@@ -583,6 +616,8 @@ const init = async () => {
   console.log(`Running at: ${server.info.uri}, HAPI.JS server version ${server.version}`);
   console.log(`Initializing request - caching data ...`);
   const response = await server.inject(injectOptions);
+  console.log(`Initializing request - caching image data ...`);
+  const response2 = await server.inject(injectOptionsImgreload);
   console.log(`System ready ...`);
   };
 
@@ -610,7 +645,18 @@ timer.add([
           await server.inject(injectOptionsReload);
           done();
         }
+    },
+    {
+        id: 'Imageupdate',       
+        tickInterval: 1439,   
+        totalRuns: 0,       
+        async callback(task, done) {
+          console.log(`${task.id} task has run ${task.currentRuns} times.`);
+          await server.inject(injectOptionsImgreload);
+          done();
+        }
     }
+
 ]);
  
  
