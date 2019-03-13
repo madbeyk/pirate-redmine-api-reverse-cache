@@ -1,5 +1,3 @@
-/*jslint 
-es6:true*/
 'use strict';
 
 const Hapi = require('hapi');
@@ -8,7 +6,7 @@ const Wreck = require('wreck');
 const { TaskTimer } = require('tasktimer');
 const sharp = require('sharp');
 const hapijsStatusMonitor = require('hapijs-status-monitor');
-//const csv = require('csv-parser'); 
+const csv = require('csv-parser'); 
 
 // -----------------------------------------------------------------------------
 // setup 
@@ -174,13 +172,49 @@ function isNumber(n) {
 }
 
 
+async function getcsv(url) {
+  try {
+    var ts1 = new Date().getTime();
+    const { res2, payload } = await Wreck.get(url,{redirects: 5});
+    var csv_size=Buffer.byteLength(payload);
+    const str = await Wreck.toReadableStream(payload);
+    return new Promise((resolve, reject) => {
+      var outdata = [];
+      outdata['size']=csv_size;
+      outdata['items']=[];
+      str.pipe(csv(['id', 'tags']))
+      .on('data', (data) => {     
+        if (isNumber(data.id)) {
+          var rowdata=[];
+          rowdata['id']=data.id;
+          rowdata['tags']=data.tags;
+          outdata['items'].push(rowdata);
+          }
+        })
+      .on('error', e => {
+        reject(e);
+        })
+      .on('end', () => {
+        var ts2 = new Date().getTime();
+        outdata['time']=(ts2-ts1)+'ms';
+        resolve(outdata);          
+        });
+      });
+    } catch (ex) {
+    console.log('!! GetCSV error / '+ex.message);
+    throw ex;      
+    }
+  }  
+
+
+
 // -----------------------------------------------------------------------------
 // global method (fetch, filter and sort)
 // -----------------------------------------------------------------------------
 
 const getRedmineData = async(id,flags) => {
-    console.log('Redmine data fetch ...');
     var ts1 = new Date().getTime();
+    console.log('Redmine data fetch ...');
     var search=true;
     var iter=0;
     var totalcount=0;
@@ -193,6 +227,7 @@ const getRedmineData = async(id,flags) => {
     
       // parse CSV tags data
       
+      /*
       const { res, payload } = await Wreck.get(url_csv,{redirects: 5});
       var csv_size=Buffer.byteLength(payload);
       var csvstr=payload.toString().split("\n");
@@ -213,31 +248,17 @@ const getRedmineData = async(id,flags) => {
             }
           }
         }
-        
-      /*
-      async function getcsv() {
-        const { res2, payload } = await Wreck.get(url_csv,{redirects: 5});
-        var csv_size=Buffer.byteLength(payload);
-        console.log('Redmine data fetch - CSV data size:'+csv_size+' bytes');              
-        var csvdata = [];
-        const str = await Wreck.toReadableStream(payload).pipe(csv(['id', 'tags']))
-        .on('data', (data) => {     
-          if (isNumber(data.id)) {
-            //console.log (data.id+' -> '+data.tags);
-            csvdata[data.id]=data.tags;
-            }
-          }
-        )
-        .on('end', () => {
-           //console.log(JSON.stringify(csvdata));
-           return(csvdata);
+      */  
+      
+      var csvdata = [];
+      await getcsv(url_csv).then(function(outdata) {
+        csvdata=outdata['items'];
+        csv_size=outdata['size'];
+        console.log('Redmine data fetch - CSV items:'+csvdata.length+', size:'+csv_size+' bytes, time:'+outdata['time']);
         });
-        }
         
-      var csvdata = await getcsv();
-      */
-      console.log('Redmine data fetch - CSV data, size:'+csv_size+' bytes, items:'+csvdata.length);
       //console.log('*');
+      var ts2 = new Date().getTime();
           
       while (search) {
         var acturl=url+"&offset="+(iter*100)+"&limit=100";
@@ -317,13 +338,15 @@ const getRedmineData = async(id,flags) => {
           issues.push(qq);
           }
         }
-      console.log('Redmine data fetch - Issues count total:'+totalcount+', ('+st+' bytes) in '+iter+' request(s).');
+      var ts3 = new Date().getTime();  
+      console.log('Redmine data fetch - JSON Issues count total:'+totalcount+', ('+st+' bytes) in '+iter+' request(s), time:'+(ts3-ts2)+'ms');
       issues = sortJSON(issues,pref);  
-      console.log('Redmine data fetch - Sort complete.');
+      var ts4 = new Date().getTime();  
+      console.log('Redmine data fetch - JSON Sort complete, time:'+(ts4-ts3)+'ms');
       var out=JSON.stringify(issues);
       var len=out.length;
-      var ts2 = new Date().getTime();
-      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/(st+csv_size))*100)+'% of original payload], images:'+gimages.length+', time:'+(ts2-ts1)+'ms');
+      var ts5 = new Date().getTime();
+      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/(st+csv_size))*100)+'% of original payload], images:'+gimages.length+', total time:'+(ts5-ts1)+'ms');
       //gimages=images;
       //url=url2;
       return('{"issues":'+out+'}');

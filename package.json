@@ -11,6 +11,7 @@
   "author": "Madbeyk (madbeyk@github.com)",
   "license": "ISC",
   "dependencies": {
+    "csv-parser": "^2.2.0",
     "hapi": "^18.1.0",
     "hapijs-status-monitor": "ziyasal/hapijs-status-monitor",
     "nodemon": "^1.18.10",
