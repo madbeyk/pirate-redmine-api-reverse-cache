@@ -7,15 +7,20 @@ const Wreck = require('wreck');
 //const fs = require('fs');
 const { TaskTimer } = require('tasktimer');
 const sharp = require('sharp');
+const hapijsStatusMonitor = require('hapijs-status-monitor');
+//const csv = require('csv-parser'); 
 
 // -----------------------------------------------------------------------------
 // setup 
 // -----------------------------------------------------------------------------
 
-var url = "https://redmine.pirati.cz/projects/snemovna/issues.json?utf8=%E2%9C%93&set_filter=1&sort=id%3Adesc%2C%2C&f%5B%5D=tracker_id&op%5Btracker_id%5D=%3D&v%5Btracker_id%5D%5B%5D=28&f%5B%5D=status_id&op%5Bstatus_id%5D=%21&v%5Bstatus_id%5D%5B%5D=6&f%5B%5D=&c%5B%5D=subject&c%5B%5D=tags_relations&group_by=project&t%5B%5D=";
-var url_csv = "https://redmine.pirati.cz/projects/snemovna/issues.csv?utf8=%E2%9C%93&set_filter=1&sort=id%3Adesc%2C%2C&f[]=tracker_id&op[tracker_id]=%3D&v[tracker_id][]=28&f[]=status_id&op[status_id]=!&v[status_id][]=6&c[]=tags_relations";
-var gimages=[];
+//var url = "https://redmine.pirati.cz/projects/snemovna/issues.json?utf8=%E2%9C%93&set_filter=1&sort=id%3Adesc%2C%2C&f%5B%5D=tracker_id&op%5Btracker_id%5D=%3D&v%5Btracker_id%5D%5B%5D=28&f%5B%5D=status_id&op%5Bstatus_id%5D=%21&v%5Bstatus_id%5D%5B%5D=6&f%5B%5D=&c%5B%5D=subject&c%5B%5D=tags_relations&group_by=project&t%5B%5D=";
+var url = "https://redmine.pirati.cz/projects/snemovna/issues.json?utf8=%E2%9C%93&set_filter=1&sort=id%3Adesc&f%5B%5D=tracker_id&op%5Btracker_id%5D=%3D&v%5Btracker_id%5D%5B%5D=28&f%5B%5D=status_id&op%5Bstatus_id%5D=%3D&v%5Bstatus_id%5D%5B%5D=5&f%5B%5D=&c%5B%5D=subject&c%5B%5D=tags_relations&group_by=project&t%5B%5D=";
+//var url_csv = "https://redmine.pirati.cz/projects/snemovna/issues.csv?utf8=%E2%9C%93&set_filter=1&sort=id%3Adesc%2C%2C&f[]=tracker_id&op[tracker_id]=%3D&v[tracker_id][]=28&f[]=status_id&op[status_id]=!&v[status_id][]=6&c[]=tags_relations";
+var url_csv = "https://redmine.pirati.cz/projects/snemovna/issues.csv?utf8=%E2%9C%93&set_filter=1&f%5B%5D=tracker_id&op%5Btracker_id%5D=%3D&v%5Btracker_id%5D%5B%5D=28&f%5B%5D=status_id&op%5Bstatus_id%5D=%3D&v%5Bstatus_id%5D%5B%5D=5&c%5B%5D=tags_relations";
 
+var gimages=[];
+var lastping=0;
 
 const pref={
 'resort-doprava-a-logistika':4,
@@ -41,7 +46,7 @@ const server = Hapi.server({
 
 const NS_PER_SEC = 1e9;
 
-const version='2019-03-11';
+const version='2019-03-13';
 
 const htmlinfo=`
        <html>
@@ -164,6 +169,9 @@ function financial(x) {
   return Number.parseFloat(x).toFixed(2);
 }
 
+function isNumber(n) {
+  return !isNaN(parseFloat(n)) && isFinite(n);
+}
 
 
 // -----------------------------------------------------------------------------
@@ -177,12 +185,60 @@ const getRedmineData = async(id,flags) => {
     var iter=0;
     var totalcount=0;
     var issues=[];
-    //var images=[];
     var st=0;
+    var csv_size=0;
     
     
     try {
     
+      // parse CSV tags data
+      
+      const { res, payload } = await Wreck.get(url_csv,{redirects: 5});
+      var csv_size=Buffer.byteLength(payload);
+      var csvstr=payload.toString().split("\n");
+      var csvdata = [];
+      //console.log('pocet:'+csvstr.length);
+      for(var q in csvstr) {
+        var poz=csvstr[q].indexOf(',');
+        //console.log(q+'|'+poz);        
+        if (poz>0) {
+          var idd=csvstr[q].substr(0,poz);
+          if (isNumber(idd)) {
+            var ddata=csvstr[q].substr(poz+2,csvstr[q].length-poz-3);
+            //console.log(idd+' -> '+ddata);
+            var rowdata=[];
+            rowdata['id']=idd;
+            rowdata['tags']=ddata;
+            csvdata.push(rowdata);
+            }
+          }
+        }
+        
+      /*
+      async function getcsv() {
+        const { res2, payload } = await Wreck.get(url_csv,{redirects: 5});
+        var csv_size=Buffer.byteLength(payload);
+        console.log('Redmine data fetch - CSV data size:'+csv_size+' bytes');              
+        var csvdata = [];
+        const str = await Wreck.toReadableStream(payload).pipe(csv(['id', 'tags']))
+        .on('data', (data) => {     
+          if (isNumber(data.id)) {
+            //console.log (data.id+' -> '+data.tags);
+            csvdata[data.id]=data.tags;
+            }
+          }
+        )
+        .on('end', () => {
+           //console.log(JSON.stringify(csvdata));
+           return(csvdata);
+        });
+        }
+        
+      var csvdata = await getcsv();
+      */
+      console.log('Redmine data fetch - CSV data, size:'+csv_size+' bytes, items:'+csvdata.length);
+      //console.log('*');
+          
       while (search) {
         var acturl=url+"&offset="+(iter*100)+"&limit=100";
         const { res, payload } = await Wreck.get(acturl);
@@ -228,15 +284,32 @@ const getRedmineData = async(id,flags) => {
           // fix markdown url space issue 
           qq.description=doc.issues[i].description.replace(/(\[[^\[\]]+\])\s+(\([^)]+\))/g, '$1$2');
           
+          // merge tags from CSV data
+          for(var q in csvdata) {
+            if (csvdata[q]['id']==qq.id) {
+              qq.tags=csvdata[q]['tags'];
+              }
+            }
+          
+          // parse image
           if ((doc.issues[i].hasOwnProperty('custom_fields')) && (doc.issues[i].custom_fields[0].hasOwnProperty('value')) && (doc.issues[i].custom_fields[0].value!="")){
             qq.custom_fields={};
             qq.custom_fields[0]={};
-            qq.custom_fields[0].value=doc.issues[i].custom_fields[0].value;
+
+            // remove fbclid parameters on image links
+            var im = doc.issues[i].custom_fields[0].value;
+            if (im.indexOf('fbclid=') !== -1) {
+              var url2 = new URL(im);
+              url2.searchParams.delete('fbclid');
+              im = url2.href;
+              }
+            qq.custom_fields[0].value=im;
             qq.custom_fields[0].id=doc.issues[i].custom_fields[0].id;
-            var im=qq.custom_fields[0].value;
-            var imenc=encodeURIComponent(im);
+            
+            //var imenc=encodeURIComponent(im);
             if (gimages.includes(im)==false) gimages.push(im);
             //console.log('Linked image '+im+' ['+imenc+']');
+            
             // filtr na nesmysly v img
             //if (qq.custom_fields[0].value.substr(0,22)=='https://mrak.pirati.cz') qq.custom_fields[0].value='';
             //if (qq.custom_fields[0].value.substr(0,28)=='https://www.ceskatelevize.cz') qq.custom_fields[0].value='';
@@ -250,7 +323,7 @@ const getRedmineData = async(id,flags) => {
       var out=JSON.stringify(issues);
       var len=out.length;
       var ts2 = new Date().getTime();
-      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/st)*100)+'% of original payload], images:'+gimages.length+', time:'+(ts2-ts1)+'ms');
+      console.log('Redmine data fetch finished ('+len+' bytes) ['+financial((len/(st+csv_size))*100)+'% of original payload], images:'+gimages.length+', time:'+(ts2-ts1)+'ms');
       //gimages=images;
       //url=url2;
       return('{"issues":'+out+'}');
@@ -430,11 +503,6 @@ server.route({
        return `
        `+htmlinfo+`
        <p>
-       Event loop delay: `+server.load.eventLoopDelay+` ms<br/>
-       Heap used: `+server.load.heapUsed+`<br/>
-       RSS memory usage: `+server.load.rss+`<br/>
-       </p>
-       <p>
        Last log:
        <pre>`+out+`</pre>
        </p>
@@ -454,15 +522,24 @@ server.route({
     handler: async function (request, h) {
       const ip = request.info.remoteAddress;
       const time = process.hrtime();
-      const {value, cached} = await server.methods.getRedmineData(1);
+      var ts = new Date().getTime();
+      var add=" (not processed)";
+      if (ts-lastping>=60000) {
+        const {value, cached} = await server.methods.getRedmineData(1);
+        if (cached!=null) add=" (cached "+cached.ttl+")"; else add=" (not cached)";
+        lastping=ts;
+        }
+      //add+=" ts:"+ts+", lastping:"+lastping+", diff:"+(ts-lastping);  
       const diff = process.hrtime(time);
       var ft=financial((diff[0] * NS_PER_SEC + diff[1])/1000);
+      /*
       if (cached!=null) {
         console.log('Pinged from IP:'+ip+', cached - ttl:'+cached.ttl+', processing time:'+ft+'µs');
         } else {
         console.log('Pinged from IP:'+ip+', not cached, processing time:'+ft+'µs');
         }
-      return 'pinged in '+ft+'µs';
+      */
+      return 'pinged in '+ft+'µs'+add;
       },
     options: {
       cache: {
@@ -523,6 +600,7 @@ server.route({
        <li><strong><a href='/log'>/log</a></strong> - last log info</li>
        <li><strong><a href='/ping'>/ping</a></strong> - ping a server, reloads internal data when too old</li>
        <li><strong><a href='/info'>/info</a></strong> - basic info</li>
+       <li><strong><a href='/status'>/status</a></strong> - status info (CPU load, Memory usage, requests per second)</li>
        </ul>
        `;       
       }
@@ -534,16 +612,23 @@ server.route({
     path: '/',
     handler: async function (request, h) {
       //rheaders=JSON.stringify(request.headers);
+      
       const time = process.hrtime();
+      
       const {value, cached} = await server.methods.getRedmineData(1);
       //const ip = request.info.remoteAddress;
-      const ip = request.headers['trueip'];
+      
+      ///*
+      var ip = request.headers['trueip'];
+      if (ip==undefined) ip=request.info.remoteAddress;
+       
       const diff = process.hrtime(time);
       if (cached!=null) {
         console.log('Request IP:'+ip+', cached - ttl:'+cached.ttl+', processing time:'+financial((diff[0] * NS_PER_SEC + diff[1])/1000)+'µs');
         } else {
         console.log('Request IP:'+ip+', not cached, processing time:'+financial((diff[0] * NS_PER_SEC + diff[1])/1000)+'µs');
         }
+      //*/
 
       const lastModified = cached ? new Date(cached.stored) : new Date();
       const response = h.response(value).header('Last-modified', lastModified.toUTCString()).header('Access-Control-Allow-Origin','*').type('application/json');
@@ -572,7 +657,8 @@ server.route({
       var {value, cached} = await server.methods.getImageData(gid,width,height,gtyp);
       
       //const ip = request.info.remoteAddress;
-      const ip = request.headers['trueip'];
+      var ip = request.headers['trueip'];
+      if (ip==undefined)  ip = request.info.remoteAddress
       const diff = process.hrtime(time);
       if (cached!=null) {
         console.log('Image ('+gid+') request IP:'+ip+', cached - ttl:'+cached.ttl+', typ:'+gtyp+', size:'+width+'x'+height+'px, processing time:'+financial((diff[0] * NS_PER_SEC + diff[1])/1000)+'µs');
@@ -611,7 +697,8 @@ server.route({
 const init = async () => {
 
   console.log('PIRATE REDMINE API REVERSE PROXY CACHE (v.'+version+')');
-  
+
+  await server.register({ plugin: hapijsStatusMonitor, options: {title: 'PIRATE REDMINE API REVERSE PROXY CACHE (v.'+version+')'}});
   await server.start();
   console.log(`Running at: ${server.info.uri}, HAPI.JS server version ${server.version}`);
   console.log(`Initializing request - caching data ...`);

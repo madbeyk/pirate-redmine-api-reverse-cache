@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "hapi": "^18.1.0",
+    "hapijs-status-monitor": "ziyasal/hapijs-status-monitor",
     "nodemon": "^1.18.10",
     "sharp": "^0.21.3",
     "tasktimer": "^2.0.1",
