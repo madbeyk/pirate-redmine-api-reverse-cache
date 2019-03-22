@@ -27,7 +27,8 @@ const pref={
 'resort-zemedelstvi':7,
 'resort-zivotni-prostredi':8,
 'resort-skolstvi':10,
-'resort-kultura':2
+'resort-kultura':2,
+'snemovna':0
 };
 
 const server = Hapi.server({
@@ -37,7 +38,7 @@ const server = Hapi.server({
 
 const NS_PER_SEC = 1e9;
 
-const version='2019-03-13_master';
+const version='2019-03-22_master';
 
 const htmlinfo=`
        <html>
@@ -88,8 +89,10 @@ const injectOptionsReload = {
 
 function sortJSON(data,pref) {
     return data.sort(function (a, b) {
-        var x = pref[slug(a.project.name)]*10+a.priority.id;
-        var y = pref[slug(b.project.name)]*10+b.priority.id;
+        var slgx=slug(a.project.name); 
+        var slgy=slug(b.project.name);
+        if (pref[slgx] !== undefined) var x = pref[slgx]*10+a.priority.id; else var x=a.priority.id;
+        if (pref[slgy] !== undefined) var y = pref[slgy]*10+b.priority.id; else var y=b.priority.id;
         return ((x < y) ? 1 : ((x > y) ? -1 : 0));
     });
 }
@@ -198,7 +201,7 @@ const getRedmineData = async(id,flags) => {
         iter++;
         if (totalcount>(iter*100)) search=true; else search=false;
         for(var i in doc.issues) {        
-          //console.log('Processing '+i+' [id:'+doc.issues[i].id+'] of '+totalcount+' ...');
+          console.log('Processing '+i+' [id:'+doc.issues[i].id+'] of '+totalcount+' ... ('+slug(doc.issues[i].project.name)+' / '+doc.issues[i].priority.id+')');
           
           // filtering each issue
           var qq = new Object();
