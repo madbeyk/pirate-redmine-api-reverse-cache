@@ -201,7 +201,7 @@ const getRedmineData = async(id,flags) => {
         iter++;
         if (totalcount>(iter*100)) search=true; else search=false;
         for(var i in doc.issues) {        
-          console.log('Processing '+i+' [id:'+doc.issues[i].id+'] of '+totalcount+' ... ('+slug(doc.issues[i].project.name)+' / '+doc.issues[i].priority.id+')');
+          //console.log('Processing '+i+' [id:'+doc.issues[i].id+'] of '+totalcount+' ... ('+slug(doc.issues[i].project.name)+' / '+doc.issues[i].priority.id+')');
           
           // filtering each issue
           var qq = new Object();
