@@ -30,6 +30,7 @@ Caching data in catbox-memory.
 
 ### Install
 ```
+git clone https://github.com/madbeyk/pirate-redmine-api-reverse-cache.git
 yarn install
 ```
 
@@ -37,6 +38,11 @@ yarn install
 
 process.env.HOST - IP adrress of server (default 0.0.0.0)<br/>
 process.env.PORT - running port (default 80)
+```
+export PORT=3001
+export HOST=your.host.ip
+```
+
 
 ### Run
 ```
