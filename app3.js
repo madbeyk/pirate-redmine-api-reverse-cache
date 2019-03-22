@@ -34,7 +34,8 @@ const pref={
 'resort-zemedelstvi':7,
 'resort-zivotni-prostredi':8,
 'resort-skolstvi':10,
-'resort-kultura':2
+'resort-kultura':2,
+'snemovna':0
 };
 
 const server = Hapi.server({
@@ -44,7 +45,7 @@ const server = Hapi.server({
 
 const NS_PER_SEC = 1e9;
 
-const version='2019-03-13';
+const version='2019-03-22_testing';
 
 const htmlinfo=`
        <html>
@@ -101,8 +102,10 @@ const injectOptionsReload = {
 
 function sortJSON(data,pref) {
     return data.sort(function (a, b) {
-        var x = pref[slug(a.project.name)]*10+a.priority.id;
-        var y = pref[slug(b.project.name)]*10+b.priority.id;
+        var slgx=slug(a.project.name); 
+        var slgy=slug(b.project.name);
+        if (pref[slgx] !== undefined) var x = pref[slgx]*10+a.priority.id; else var x=a.priority.id;
+        if (pref[slgy] !== undefined) var y = pref[slgy]*10+b.priority.id; else var y=b.priority.id;
         return ((x < y) ? 1 : ((x > y) ? -1 : 0));
     });
 }
@@ -170,6 +173,16 @@ function financial(x) {
 function isNumber(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
 }
+
+function Base64EncodeUrl(str){
+    return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/\=+$/, '');
+}
+
+function Base64DecodeUrl(str){
+    str = (str + '===').slice(0, str.length + (str.length % 4));
+    return str.replace(/-/g, '+').replace(/_/g, '/');
+}
+
 
 
 async function getcsv(url) {
@@ -328,8 +341,17 @@ const getRedmineData = async(id,flags) => {
             qq.custom_fields[0].id=doc.issues[i].custom_fields[0].id;
             
             //var imenc=encodeURIComponent(im);
+            //var imenc=slug(im);
+            
+            /*
+            var b = new Buffer(im);
+            var imenc = Base64EncodeUrl(b.toString('base64'));
+            var b = new Buffer(Base64DecodeUrl(imenc), 'base64')
+            var imenc2 = b.toString();
+            */
+            
             if (gimages.includes(im)==false) gimages.push(im);
-            //console.log('Linked image '+im+' ['+imenc+']');
+            //console.log('Linked image '+im+' ['+imenc+'] ['+imenc2+']');
             
             // filtr na nesmysly v img
             //if (qq.custom_fields[0].value.substr(0,22)=='https://mrak.pirati.cz') qq.custom_fields[0].value='';
@@ -397,6 +419,8 @@ const cache = server.cache({ segment: 'images', expiresIn: 24 *60 * 60 * 1000 })
 const getImageData = async(id,width,height,gtyp,flags) => {
     //console.log('Image data fetch ...');
     var ts1 = new Date().getTime();
+
+    var id = decodeURIComponent(id);
 
     if (gimages.includes(id)) { 
 
@@ -671,11 +695,12 @@ server.route({
     path: '/img/{gid}',
     handler: async function (request, h) {
       //rheaders=JSON.stringify(request.headers);
+      const fmts = ['jpg','webp','png'];
       const time = process.hrtime();
-      const gid = request.params.gid;
-      const width = request.query.w || 240;
-      const height = request.query.h || 240;
-      const gtyp = request.query.t || "jpg";
+      const gid = decodeURIComponent(request.params.gid);
+      const width = (((request.query.w<1025)&&(request.query.w>0))?request.query.w:(request.query.w>1024)?1024:240) || 240;
+      const height = request.query.h<1025 || 240;
+      const gtyp = ((fmts.includes(request.query.t))?request.query.t:'jpg') || "jpg";
       
       var {value, cached} = await server.methods.getImageData(gid,width,height,gtyp);
       
@@ -689,7 +714,7 @@ server.route({
         console.log('Image ('+gid+') request IP:'+ip+', not cached, typ:'+gtyp+', size:'+width+'x'+height+'px, processing time:'+financial((diff[0] * NS_PER_SEC + diff[1])/1000)+'µs');
         }
 
-      var typ='image/webp';
+      var typ='image/jpeg';
       if (gtyp=='webp') typ='image/webp'; else if (gtyp=='jpg') typ='image/jpeg'; else if (gtyp=='png') typ='image/png';
 
       //var prip=gid.toLowerCase().substr(-4,4);

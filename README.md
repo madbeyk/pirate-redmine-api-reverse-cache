@@ -1,10 +1,11 @@
 # Pirate Redmine API Reverse Proxy Cache
 early beta (big big bordel) stage
 
-#### merging, filtering, sorting and autoupdating ability, experimental image proxy (resizing, minimizing)
+#### merging, filtering, sorting and autoupdating ability, experimental image proxy (resizing, minimizing), CSV parsing for tags
 
-Source data - Czech Pirate Party Redmine project management server JSON API<br/>
+Source data - Czech Pirate Party Redmine project management server API (JSON and CSV)<br/>
 https://redmine.pirati.cz/projects/snemovna/issues.json
+https://redmine.pirati.cz/projects/snemovna/issues.csv
 
 Output purpose - Czech Pirate Party webpage media results application (subpage)<br/>
 https://pirati.cz/vysledky
@@ -41,7 +42,7 @@ Caching data in catbox-memory.
 
 ### Install
 ```
-git clone https://github.com/madbeyk/pirate-redmine-api-reverse-cache-new.git
+git clone --single-branch --branch image_parser https://github.com/madbeyk/pirate-redmine-api-reverse-cache-new.git
 yarn install
 ```
 
@@ -52,9 +53,14 @@ Only configuring options are IP address and PORT of running instance of server
 process.env.HOST - IP adrress of server (default 0.0.0.0)<br/>
 process.env.PORT - server port  (default 80)
 
+```
+export PORT=3001
+export HOST=your.host.ip
+```
+
 ### Run
 ```
-yarn run start2
+yarn run start3
 ```
 
 ### Todo
@@ -64,7 +70,7 @@ yarn run start2
 - [x] Sorting by resorts and internal priority of each issue
 - [x] Merge paginated requests to redmine (max. 100 results in one API response)
 - [x] Automatic data update every 30 minutes
-- [x] Image processing (caching, resizing, minimizing ...) - *currently testing WebP support*
+- [x] Image processing (caching, resizing, minimizing ...) - working WebP support
 - [ ] Advanced external API error handling (outtages ...)
 
 
